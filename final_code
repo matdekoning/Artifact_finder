@@ -1,0 +1,92 @@
+# libraries needed to run algorithms
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+import matplotlib.pyplot as plt
+
+
+class Trainer:
+
+    #class variables
+    file_root = "C:/Users/makin/Documents/"
+
+    #method to get data and build Analytical Base Table
+    def createABT(self):
+        df = pd.read_csv(Trainer.file_root+"ABT.csv")
+        df = df.reindex(np.random.permutation(df.index))
+        return(df)
+
+    def analyzeABT(self,df):
+        features = ['NEAR_TEMPLE','NEAR_BATTLE_SITE','NEAR_ANCIENT_HARBOR','NEAR_POLIS','NEAR_MODERN_CITY', 'CLASSIFICATION']
+        df = df[features]
+        positives = df[df.CLASSIFICATION == 1]
+        pos_mean, neg_mean = [],[]
+        for column in positives.columns:
+            pos_mean += [positives[column].mean()]
+        negatives = df[df.CLASSIFICATION == 0]
+        for column in negatives.columns:
+            neg_mean += [negatives[column].mean()]
+
+        fig, ax = plt.subplots()
+        ind = np.arange(6)
+        width = 0.35  # the width of the bars
+        p1 = ax.bar(ind, pos_mean, width)
+        p2 = ax.bar(ind + width, neg_mean, width, color='darkorange')
+        ax.set_title('Mean of features compared to wheter an ancient object was found')
+        ax.set_xticks(ind + width / 2)
+        ax.set_xticklabels((['Temple','Battle','Harbor','Polis','City','Classifacation']))
+        ax.legend((p1[0], p2[0]), ('Mean when object was found (1)', 'Mean when no object was found (0)'))
+        ax.autoscale_view()
+        plt.show()
+
+    # method where the model is trained
+    def trainingModel(self,df):
+        X = df[['NEAR_TEMPLE','NEAR_BATTLE_SITE','NEAR_ANCIENT_HARBOR','NEAR_POLIS','NEAR_MODERN_CITY']]
+        y = df['CLASSIFICATION']
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.8)
+        gb = GradientBoostingClassifier(n_estimators=30, learning_rate=0.5, max_features=2, max_depth = 5)
+        gb.fit(X_train,y_train)
+        y_scores_gb = gb.decision_function(X_test)
+        fpr_gb, tpr_gb, _ = roc_curve(y_test, y_scores_gb)
+        roc_auc_gb = auc(fpr_gb, tpr_gb)
+        i=0
+        for column in X.columns:
+            print(column, gb.feature_importances_[i])
+            i += 1
+        print("Area under ROC curve = {:0.2f}".format(roc_auc_gb))
+        return(fpr_gb, tpr_gb, gb)
+
+
+    #method where the results are visualized
+    def visualizeResults(self, fpr_gb, tpr_gb):
+        plt.figure(1)
+        plt.plot([1, 0], [1, 0], 'k--', label='Reference line')
+        plt.plot()
+        plt.plot(fpr_gb, tpr_gb, label='Gradient boosting')
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.legend(loc='best')
+        plt.title('ROC curve')
+        plt.show()
+
+    #method to test our algorithm on potential archeological sites
+    def testAlgo(self, gb):
+        temp_dist = 1 if int(input("Enter distance from nearest old temple:")) < 10 else 0
+        battle_dist = 1 if int(input("Enter distance from nearest ancient battle site:")) < 10 else 0
+        harbor_dist = 1 if int(input("Enter distance from nearest ancient harbor:")) < 10 else 0
+        polis_dist = 1 if int(input("Enter distance from nearest polis:")) < 10 else 0
+        city_dist = 1 if int(input("Enter distance from nearest modern city:")) < 10 else 0
+        X = np.array([temp_dist,battle_dist,harbor_dist,polis_dist,city_dist]).reshape(1, -1)
+        if gb.predict(X) == [1]:
+            print("This is a good site to investigate!")
+        else:
+            print("Better look somewhere else!")
+
+algo = Trainer()
+df = algo.createABT()
+algo.analyzeABT(df)
+fpr_gb, tpr_gb, gb = algo.trainingModel(df)
+algo.visualizeResults(fpr_gb, tpr_gb)
+algo.testAlgo(gb)
